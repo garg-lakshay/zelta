@@ -1,0 +1,222 @@
+═══════════════════════════════════════════════════════════════
+ZELTA — ANALYTICS FORMULA REFERENCE
+═══════════════════════════════════════════════════════════════
+Constant: STARTING_CAPITAL = ₹1,00,000
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1 — PERFORMANCE METRICS
+(src/services/performance.service.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+totalTrades         = trades.length
+
+winningTrades       = count(trades where pnl > 0)
+losingTrades        = count(trades where pnl < 0)
+
+winRate             = (winningTrades / totalTrades) × 100
+lossRate            = (losingTrades  / totalTrades) × 100
+
+totalPnL            = Σ trade.pnl  (all trades)
+grossProfit         = Σ pnl         (winning trades only)
+grossLoss           = Σ |pnl|       (losing trades only, stored positive)
+
+averageWinningTrade = grossProfit / winningTrades
+                      → 0 if winningTrades = 0
+
+averageLosingTrade  = grossLoss / losingTrades
+                      → 0 if losingTrades = 0
+
+profitFactor        = grossProfit / grossLoss
+                      → 999 if grossLoss = 0 and grossProfit > 0
+                      → 0   if grossLoss = 0 and grossProfit = 0
+
+riskRewardRatio     = averageWinningTrade / averageLosingTrade
+                      → 0 if averageLosingTrade = 0
+
+expectancy          = (winRate/100 × averageWinningTrade)
+                    - (lossRate/100 × averageLosingTrade)
+
+largestWinningTrade = max(pnl) across all winning trades  → 0 if none
+largestLosingTrade  = max(|pnl|) across all losing trades → 0 if none
+
+largestWinningStreak:
+  iterate trades in chronological order
+  increment counter on win, reset on loss
+  track running maximum
+
+largestLosingStreak:
+  iterate trades in chronological order
+  increment counter on loss, reset on win
+  track running maximum
+
+averageHoldingDuration = mean(trade.holdingDuration)   [in minutes]
+
+averageTradesPerDay    = totalTrades / count(uniqueEntryDates)
+
+equityCurve:
+  sort trades by exitDate ascending
+  runningTotal = 0
+  for each trade: runningTotal += pnl
+  → [{ date: exitDate "YYYY-MM-DD", value: runningTotal }]
+
+dailyPnL:
+  group trades by entryDate ("YYYY-MM-DD")
+  sum pnl per group
+  → [{ date, pnl }] sorted by date ascending
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2 — RISK METRICS
+(src/services/risk.service.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+maxDrawdown:
+  Using equityCurve (cumulative PnL values):
+  peak = 0
+  for each point:
+    if value > peak: peak = value
+    if peak > 0: drawdown = (peak − value) / peak × 100
+  maxDrawdown = max(all drawdown values)
+
+averageDrawdown:
+  Detect drawdown episodes from equityCurve:
+  episode starts when value drops below current peak
+  episode ends   when value recovers to or above peak
+  record max drawdown reached within each episode
+  averageDrawdown = mean(all episode maximums)
+
+sharpeRatio:
+  dailyReturns = dailyPnL / STARTING_CAPITAL (per day)
+  riskFreeDaily = 0.065 / 252  (6.5% annual risk-free rate)
+  sharpe = (mean(dailyReturns) − riskFreeDaily) / stdDev(dailyReturns)
+         × √252  (annualised)
+  → 0 if stdDev = 0
+
+calmarRatio:
+  uniqueDates = count of unique entry dates
+  annualisedReturn = (totalPnL / STARTING_CAPITAL) × (365 / uniqueDates) × 100
+  calmar = annualisedReturn / maxDrawdown
+  → 0 if maxDrawdown = 0
+
+averagePositionSize    = mean(trade.tradeValue)
+portfolioExposure      = (averagePositionSize / STARTING_CAPITAL) × 100
+
+positionConcentration (Herfindahl-Hirschman Index):
+  group trades by symbol
+  for each symbol: weight = (symbolTotalTradeValue / totalTradeValue) × 100
+  HHI = Σ weight²
+  scale: 0 (perfectly diversified) → 10,000 (single stock)
+
+sectorConcentration:
+  group trades by sector
+  for each sector: pct = (sectorTotalTradeValue / totalTradeValue) × 100
+  sectorConcentration = max(all sector percentages)
+  → 0 if no sector data
+
+sectorExposure (pie chart data):
+  [{ sector, percentage }] sorted by percentage descending
+  → [] if no sector data
+
+riskScore (0–100, starts at 100):
+  maxDrawdown > 20        → −20
+  sectorConcentration > 60→ −20
+  avgPositionSize > 30% of STARTING_CAPITAL → −15
+  largestLosingStreak ≥ 3 → −15
+  portfolioExposure > 50  → −10
+  clamp(0, 100)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3 — BEHAVIOUR SCORES
+(src/services/behaviour.service.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+revengeTrade detection (per losing trade at index i):
+  nextTrade = trades[i+1]
+  timeBetween  = (nextTrade.entryDate − trade.exitDate) in minutes
+  sizeIncrease = nextTrade.tradeValue > trade.tradeValue × 1.5
+  if timeBetween < 10 AND sizeIncrease: revengeCount++
+
+overtradingScore (0–100, starts at 100):
+  averageTradesPerDay > 15 → −30
+  averageTradesPerDay > 10 → −20
+  averageTradesPerDay > 6  → −10
+  clamp(0, 100)
+
+disciplineScore (0–100, starts at 100):
+  averageTradesPerDay > 10      → −10
+  positionConcentration > 3,000 → −10
+  largestLosingStreak ≥ 3       → −10
+  revengeCount > 0              → −20
+  maxDrawdown > 20              → −10
+  clamp(0, 100)
+
+emotionalScore (0–100, starts at 100):
+  revengeCount > 0              → −20
+  maxDrawdown > 20              → −15
+  averageTradesPerDay > 10      → −15
+  largestLosingStreak ≥ 5       → −15
+  profitFactor < 1              → −10
+  clamp(0, 100)
+
+consistencyScore:
+  CV   = stdDev(dailyPnL) / |mean(dailyPnL)|   (0 if mean = 0)
+  cvScore          = max(0, 100 − CV × 50)
+  profitableDaysRate = profitableDays / totalDays
+  score = (cvScore × 0.50) + (profitableDaysRate × 100 × 0.50)
+  clamp(0, 100), Math.round()
+
+traderPersonality (checked in exact order):
+  1. riskScore > 80 AND disciplineScore > 80 AND maxDrawdown < 10
+     → "Disciplined Trader"
+  2. averageTradesPerDay < 5 AND maxDrawdown < 10
+     → "Conservative Trader"
+  3. averageTradesPerDay > 10 OR maxDrawdown > 20
+     → "Aggressive Trader"
+  4. winRate > 60 AND riskRewardRatio > 2
+     → "Momentum Trader"
+  5. (default)
+     → "Developing Trader"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4 — COMPOSITE SCORES
+(src/services/analytics.service.ts)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+performanceScore:
+  profitFactorScore:
+    PF < 1:    0
+    PF ≤ 1.5:  (PF − 1) / 0.5 × 40
+    PF ≤ 3:    40 + (PF − 1.5) / 1.5 × 60
+    PF > 3:    100
+  winRateScore    = min(100, winRate × 1.2)
+  expectancyScore = min(100, expectancy / 5)  if expectancy > 0 else 0
+  rrrScore        = min(100, riskRewardRatio × 33.3)
+
+  performanceScore = round(
+    profitFactorScore × 0.30 +
+    winRateScore      × 0.25 +
+    expectancyScore   × 0.25 +
+    rrrScore          × 0.20
+  )
+
+behaviourScore = round(
+  disciplineScore  × 0.30 +
+  consistencyScore × 0.30 +
+  emotionalScore   × 0.20 +
+  overtradingScore × 0.20
+)
+
+masterScore = round(
+  performanceScore × 0.40 +
+  riskScore        × 0.35 +
+  behaviourScore   × 0.25
+)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5 — GLOBAL RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All scores (0–100)  → integers via Math.round() then clamp(0, 100)
+All float metrics   → parseFloat(value.toFixed(2))
+Division by zero    → handled explicitly per formula (return 0 or 999)
+Empty arrays        → mean([]) = 0, stdDev([]) = 0
+═══════════════════════════════════════════════════════════════

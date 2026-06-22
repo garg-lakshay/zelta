@@ -1,0 +1,142 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trades    Trade[]
+  analytics Analytics?
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// TRADES
+// Raw trade data — one row per closed trade
+// ─────────────────────────────────────────
+
+model Trade {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  symbol          String
+  sector          String?   // nullable — not all CSVs will have sector
+
+  quantity        Float
+  entryPrice      Float
+  exitPrice       Float
+
+  entryDate       DateTime
+  exitDate        DateTime
+
+  tradeValue      Float     // entryPrice × quantity
+  pnl             Float     // profit or loss on this trade
+
+  holdingDuration Int       // in minutes — exitDate minus entryDate
+
+  createdAt       DateTime  @default(now())
+
+  @@map("trades")
+}
+
+// ─────────────────────────────────────────
+// ANALYTICS
+// Pre-calculated — one row per user
+// Recalculated on every re-upload
+// ─────────────────────────────────────────
+
+model Analytics {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ── Performance Metrics ──────────────────
+  totalTrades         Int
+  winningTrades       Int
+  losingTrades        Int
+
+  winRate             Float   // percentage 0–100
+  lossRate            Float   // percentage 0–100
+
+  totalPnL            Float
+  grossProfit         Float
+  grossLoss           Float
+
+  averageWinningTrade Float
+  averageLosingTrade  Float
+
+  profitFactor        Float
+  riskRewardRatio     Float
+  expectancy          Float   // (winRate × avgWin) - (lossRate × avgLoss)
+
+  largestWinningTrade Float
+  largestLosingTrade  Float
+
+  largestWinningStreak Int
+  largestLosingStreak  Int
+
+  averageHoldingDuration Float  // in minutes
+  averageTradesPerDay    Float
+
+  // ── Risk Metrics ─────────────────────────
+  maxDrawdown          Float   // percentage 0–100
+  averageDrawdown      Float   // percentage 0–100
+  sharpeRatio          Float
+  calmarRatio          Float
+
+  averagePositionSize  Float
+  portfolioExposure    Float   // percentage of capital at risk
+
+  positionConcentration Float  // HHI score 0–10000
+  sectorConcentration   Float  // highest single sector % — null if no sector data
+
+  // ── Behaviour Scores ─────────────────────
+  overtradingScore    Int     // 0–100
+  disciplineScore     Int     // 0–100
+  emotionalScore      Int     // 0–100
+  consistencyScore    Int     // 0–100
+  riskScore           Int     // 0–100
+
+  // ── Master Score ─────────────────────────
+  performanceScore    Int     // 0–100 weighted
+  behaviourScore      Int     // 0–100 weighted
+  masterScore         Int     // 0–100 final composite
+
+  // ── Trader Classification ─────────────────
+  traderPersonality   String  // "Aggressive" | "Conservative" | "Momentum" | "Disciplined"
+
+  // ── JSON Fields ───────────────────────────
+  // equityCurve shape: [{ date: string, value: number }]
+  equityCurve         Json
+
+  // dailyPnL shape: [{ date: string, pnl: number }]
+  dailyPnL            Json
+
+  // sectorExposure shape: [{ sector: string, percentage: number }]
+  sectorExposure      Json
+
+  // insights shape: [{ type: "warning" | "tip", message: string }]
+  insights            Json
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("analytics")
+}

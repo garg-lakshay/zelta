@@ -50,8 +50,8 @@ export function SectorPieChart({ data }: Props) {
             ))}
           </Pie>
           <Tooltip
-            formatter={(val: number) => [
-              `${val.toFixed(1)}%`,
+            formatter={(val) => [
+              `${Number(val).toFixed(1)}%`,
               "Allocation",
             ]}
             contentStyle={{

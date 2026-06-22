@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Zelta — Trading Behaviour Analytics
+
+A full-stack trading analytics platform that scores traders on **Performance**, **Risk**, and **Behaviour** — not just profit.
+
+Built for prop firm traders who want to understand *why* they win or lose.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 (App Router) |
+| Language | TypeScript |
+| Database | PostgreSQL (Neon) |
+| ORM | Prisma 7 |
+| Auth | JWT (jsonwebtoken + jose) |
+| State | Zustand |
+| Charts | Recharts |
+| Styling | Tailwind CSS |
+| Icons | Lucide React |
+
+---
+
+## Features
+
+- **CSV Upload** — Upload trading history from Zerodha, Groww, Angel, or any generic CSV
+- **Performance Analytics** — Win rate, profit factor, expectancy, streaks, equity curve
+- **Risk Analytics** — Max drawdown, Sharpe ratio, Calmar ratio, sector concentration
+- **Behaviour Scoring** — Overtrading, discipline, emotional control, consistency
+- **Master Score** — A single composite score (0–100) with grade and trader personality
+- **Dashboard** — Live charts, metric cards, and score breakdowns
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/garg-lakshay/zelta.git
+cd zelta
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Set up environment variables
+
+Create a `.env` file in the root:
+
+```env
+DATABASE_URL="your_neon_postgres_connection_string"
+JWT_SECRET="your_strong_random_secret"
+```
+
+Generate a JWT secret:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
+### 4. Run database migrations
+
+```bash
+npx prisma migrate dev --name init
+```
+
+### 5. Start the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project Structure
 
-## Learn More
+```
+src/
+├── app/
+│   ├── (auth)/          # Login and register pages
+│   ├── (dashboard)/     # Dashboard layout and page
+│   └── api/             # Auth, upload, and dashboard API routes
+├── components/
+│   ├── charts/          # Recharts wrappers
+│   └── shared/          # Spinner, empty state, error message
+├── features/
+│   ├── dashboard/       # Score ring, metric cards, insight cards
+│   └── upload/          # CSV upload card with drag-and-drop
+├── hooks/               # useAuth, useDashboard, useUpload
+├── lib/                 # Prisma client, auth middleware, utils
+├── services/            # API client, analytics calculation engine
+├── store/               # Zustand auth store
+└── types/               # Shared TypeScript interfaces
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Sample CSV
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+A sample trading CSV is included at `public/sample-trades.csv`. Download it from the upload screen to test the platform.
 
-## Deploy on Vercel
+**Required columns:**
+```
+date, symbol, sector, quantity, entry_price, exit_price, pnl
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Score Breakdown
+
+| Score | What it measures |
+|---|---|
+| Performance Score | Win rate, profit factor, expectancy, streaks |
+| Risk Score | Drawdown, Sharpe ratio, position sizing, concentration |
+| Behaviour Score | Overtrading, discipline, emotional trading, consistency |
+| **Master Score** | Weighted composite of all three |
+
+**Grades:** Elite Trader (90+) · Advanced Trader (75+) · Developing Trader (60+) · Inconsistent Trader (40+) · High Risk Trader (<40)

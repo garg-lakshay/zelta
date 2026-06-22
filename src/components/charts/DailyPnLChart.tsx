@@ -9,7 +9,6 @@ import {
   XAxis,
   YAxis,
   Tooltip,
-  type TooltipProps,
 } from "recharts";
 import type { DailyPnLPoint } from "@/types";
 
@@ -19,7 +18,13 @@ const INR = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 0,
 });
 
-function CustomTooltip({ active, payload, label }: TooltipProps<number, string>) {
+interface TooltipPayload {
+  active?: boolean;
+  payload?: { value: number }[];
+  label?: string;
+}
+
+function CustomTooltip({ active, payload, label }: TooltipPayload) {
   if (!active || !payload?.length) return null;
   const val = payload[0].value ?? 0;
   return (
